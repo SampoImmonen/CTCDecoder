@@ -35,7 +35,7 @@ def logsumexp(*args):
                       for a in args))
   return a_max + lsp
 
-def decode(probs, beam_size=100, blank=0):
+def decode(probs, beam_size=100, blank=0, prune_t=0.00001):
   """
   Performs inference for the given output probabilities.
 
@@ -64,6 +64,9 @@ def decode(probs, beam_size=100, blank=0):
 
     for s in range(S): # Loop over vocab
       p = probs[t, s]
+      # prune characters with small probability
+      if math.exp(p)<prune_t:
+          continue
 
       # The variables p_b and p_nb are respectively the
       # probabilities for the prefix given that it ends in a
