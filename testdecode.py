@@ -11,6 +11,7 @@ from datasets import load_dataset
 from transformers import Wav2Vec2ForCTC, Wav2Vec2Processor
 import audio2numpy as an
 
+from ctcdecode import CTCBeamDecoder
 
 test_dataset = load_dataset("common_voice", "fi", split="test[:2%]")
 
@@ -134,6 +135,7 @@ class CTCDecoder:
         )
 
         self.decode_dict = self._dict_from_labels(labels)
+        print("Decoder ready")
 
     def _dict_from_labels(self, labels):
         d = {}
@@ -156,12 +158,12 @@ import time
 
 
 if __name__ == '__main__':
-    from ctcdecode import CTCBeamDecoder
     test1 = "data/testi.mp3"
     test2 = "data/71ebb732-427a-4fd4-be08-b2bdf9adcf62.mp3"
     test3 = "data/3bfd7887-4a92-4528-b1c5-0cf94efbc6e3.mp3"
     test4 = "data/20090202-0900-PLENARY-12-fi_20090202-20:17:30_3.ogg"
-
+    test5 = "data/5c6fbee2-7595-4367-9170-5e9c594fc73e.mp3"
+    test6  ="data/2cb8e52f-92f1-47c4-8365-cf72a38fedcd.mp3"
     t1 = time.time()
     """
     decoder = CTCBeamDecoder(
@@ -179,11 +181,11 @@ if __name__ == '__main__':
     """
 
     decoder = CTCDecoder(labels, lm_path="data/fi_3gram_lm.bin")
-    decoder2 = CTCDecoder(labels, lm_path="data/fi_5gram_lm.bin", alpha=0, beta=0)
+    decoder2 = CTCDecoder(labels, lm_path="data/fi_5gram_lm.bin", alpha=1.2, beta=0.6)
     decoder3 = CTCDecoder(labels)
     
     t2 = time.time()
-    pred, logits = recog(test4)
+    pred, logits = recog(test6)
     probs = logits.softmax(dim=2).cpu()
     #beam_results, beam_scores, timesteps, out_lens = decoder.decode(probs)
     text = decoder.decode(probs)
