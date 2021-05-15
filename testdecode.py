@@ -52,12 +52,8 @@ class SpeechRecognizer:
     def _prepareaudio(self, path : str):
         # load audio
         # regex
-        audio, sr = librosa.load(path)
-        try:
-            audio = audio[:, 1]
-        except:
-            pass
-        audio = torch.tensor(audio)
+        audio, sr = torchaudio.load(path)
+        audio = audio[0]
         audio = librosa.resample(audio.numpy().squeeze(), sr, 16_000)
         return audio
     
