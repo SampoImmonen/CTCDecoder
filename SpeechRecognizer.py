@@ -59,13 +59,32 @@ class SpeechRecognizer:
         return labels, blank_id
 
     @torch.no_grad()
-    def __call__(self, path: str):
-        audio = self._prepareaudio(path)
-        inputs = self.processor(audio, sampling_rate=16_000, return_tensors="pt", padding=True)
+    def __call__(self, input):
+        """
+        add decoding from numpy
+        input: filename or numpy array
+        """
+        
+        if isinstance(input, str):
+            input = self._prepareaudio(input)
+        inputs = self.processor(input, sampling_rate=16_000, return_tensors="pt", padding=True)
         logits = self.model(inputs.input_values.to(self.device), attention_mask=inputs.attention_mask.to(self.device)).logits
         pred_ids = self.decode(logits)
         prediction = self.processor.batch_decode(pred_ids)
         return prediction, logits
+        
+    def from_numpy(self, array):
+        """
+        decode speech from numpy array
+        """
+        pass
+
+    def from_file(self, path):
+        """
+        decode from file
+        """
+        pass
+
 
     def _from_hub(self, name):
         pass
@@ -119,9 +138,9 @@ class CTCDecoder:
 if __name__ == "__main__":
 
     recog = SpeechRecognizer(model_dir="data/voxpopuli-finetuned/")
-    pred, logits = recog("data/5c6fbee2-7595-4367-9170-5e9c594fc73e.mp3")
+    pred, logits = recog("data/testi.mp3")
     print(pred)
     labels, blank = recog.get_labels()
     #print(labels, blank)
-    decoder = CTCDecoder(labels, lm_path="data/fi_5gram_lm.bin" ,blank_id=31)
+    decoder = CTCDecoder(labels, lm_path="data/model2.bin" ,blank_id=31)
     print(decoder.decode(logits.softmax(dim=2).cpu()))

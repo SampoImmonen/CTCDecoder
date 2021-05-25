@@ -5,7 +5,7 @@ from datasets import load_dataset, load_metric
 from transformers import Wav2Vec2ForCTC, Wav2Vec2Processor, Wav2Vec2CTCTokenizer, Wav2Vec2FeatureExtractor 
 import re
 
-from testdecode import SpeechRecognizer, CTCDecoder
+from SpeechRecognizer import SpeechRecognizer, CTCDecoder
 
 #setup model
 
@@ -13,28 +13,13 @@ xlsl_aapo = "aapot/wav2vec2-large-xlsr-53-finnish"
 voxpopuli1 = "data/voxpopuli-finetuned/"
 voxpopuli_hugginface = "facebook/wav2vec2-base-10k-voxpopuli-ft-fi"
 
+#Setup model and decoder
+model = SpeechRecognizer(model_dir = voxpopuli1)
 
-print("loading model")
-model = Wav2Vec2ForCTC.from_pretrained(voxpopuli1)
+labels, blank = model.get_labels()
+lm_path = "data/model2.bin"
+decoder = CTCDecoder(labels, lm_path=lm_path, alpha=1.5, beta=0.8, blank_id=blank, beam_width=256, cutoff_top_n=15)
 
-
-print("loading processor")
-tokenizer = Wav2Vec2CTCTokenizer(voxpopuli1 +"vocab.json", unk_token="[UNK]", pad_token="[PAD]", word_delimiter_token="|")
-feature_extractor = Wav2Vec2FeatureExtractor(feature_size=1, sampling_rate=16000, padding_value=0.0, do_normalize=True, return_attention_mask=True)
-processor = Wav2Vec2Processor(feature_extractor=feature_extractor, tokenizer=tokenizer)
-
-#processor = Wav2Vec2Processor.from_pretrained(voxpopuli_hugginface)
-
-model.to("cuda")
-
-#initialize decoder
-vocab = processor.tokenizer.get_vocab()
-vals = sorted(vocab.items(), key = lambda x:x[1])
-labels = ([x[0] for x in vals])
-#labels.remove('<s>')
-#labels.remove('</s>')
-labels[20] = ' '
-print(labels)
 
 #aapo fair 5 gram
 #0.9, 1.2, 24.0168
@@ -50,8 +35,13 @@ print(labels)
 #1.5 0.8 18.02 (beam_width = 256, top_n = 15)
 
 
-lm_path = "data/fi_5gram_lm.bin"
-decoder = CTCDecoder(labels, lm_path=lm_path, alpha=1.5, beta=0.8, blank_id=len(labels)-1, beam_width=256, cutoff_top_n=15)
+#voxpopuli netti 2ngam 1.5, 0.8 10.6
+
+
+#voxpopuli model2.bin 0.
+#1.5, 0.8, 8.89
+
+
 
 def speech_file_to_array_fn(batch):
     batch["sentence"] = re.sub(chars_to_ignore_regex, '', batch["sentence"]).lower()
@@ -71,10 +61,13 @@ def evaluate(batch):
     return batch
 
 def custom_evaluate(batch):
-    inputs = processor(batch["speech"], sampling_rate=16_000, return_tensors="pt", padding=True)
+    """
+    evaluation function made for custom speechrecognizer class with separate decoder
+    """
+    #inputs = processor(batch["speech"], sampling_rate=16_000, return_tensors="pt", padding=True)
     
     with torch.no_grad():
-        logits = model(inputs.input_values.to("cuda"), attention_mask=inputs.attention_mask.to("cuda")).logits
+        pred, logits = model(batch['speech']) 
     probs = logits.softmax(dim=2).cpu()
     
     text = decoder.decode(probs)
@@ -82,24 +75,12 @@ def custom_evaluate(batch):
     #print(text)
     return batch
 
-def custom_evaluate2(batch):
-    inputs = processor(batch["speech"], sampling_rate=16_000, return_tensors="pt", padding=True)
-    
-    with torch.no_grad():
-        logits = model(inputs.input_values.to("cuda")).logits
-    probs = logits.softmax(dim=2).cpu()
-    print(probs.shape)
-    text = decoder.decode(probs)
-    batch["pred_strings"] = [text]
-    #print(text)
-    return batch
 
 if __name__ == "__main__":
 
-    
-
     test_dataset = load_dataset("common_voice", "fi", split="test")
     wer = load_metric("wer")
+    cer = load_metric("cer")
 
     chars_to_ignore_regex = '[\,\?\.\!\-\;\:\"\“\%\‘\”\�\'\...\…\–\é]'
     resampler = lambda sr, y: librosa.resample(y.numpy().squeeze(), sr, 16_000)
@@ -109,3 +90,4 @@ if __name__ == "__main__":
 
     #result = test_dataset.map(evaluate, batched=True, batch_size=1)
     print("WER: {:2f}".format(100 * wer.compute(predictions=result["pred_strings"], references=result["sentence"])))
+    print("CER: {:2f}".format(100*cer.compute(predictions=result["pred_strings"], references=result["sentence"])))
